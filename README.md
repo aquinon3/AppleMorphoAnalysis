@@ -4,7 +4,7 @@ Automated pipeline for morphological analysis of apple leaves and fruits
 ## Fruit pipeline:
 ### Original:
 ![Original](https://github.com/user-attachments/assets/227af59b-0721-4f35-821d-2cc6b2b57afa) 
-<img src="https://github.com/favicon.ico](https://github.com/user-attachments/assets/227af59b-0721-4f35-821d-2cc6b2b57afa" width="48">
+<img src="https://github.com/user-attachments/assets/227af59b-0721-4f35-821d-2cc6b2b57afa" width="200">
 
 ### Processed:
 ![Processed](https://github.com/user-attachments/assets/4975dc61-675e-4e77-85d7-4b6f2baeddb6)
