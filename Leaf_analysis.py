@@ -8,13 +8,8 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import imutils
 import pandas as pd
-import matplotlib
-import random
-from skimage.feature import peak_local_max
-from skimage.segmentation import watershed
-from scipy import ndimage
-from skimage.feature import peak_local_max
-from scipy import ndimage as ndi
+import time
+from sklearn.metrics import pairwise_distances
 from transformers import Sam3Processor, Sam3Model
 import torch
 from PIL import Image
@@ -26,6 +21,7 @@ model = Sam3Model.from_pretrained("facebook/sam3").to(device)
 processor = Sam3Processor.from_pretrained("facebook/sam3")
 
 date = date.today().strftime("%Y%m%d")
+start_time = time.perf_counter()
 
         
 def main():
@@ -81,25 +77,10 @@ def main():
         )[0]
 
 
-        #Making a mask with all leaves
-        masks = results["masks"]  # list or tensor of shape (N, H, W)
-
-        # Stack and combine (logical OR across objects)
-        if isinstance(masks, list):
-            masks_tensor = torch.stack(masks)
-        else:
-            masks_tensor = masks
-
-        combined_mask = masks_tensor.any(dim=0).cpu().numpy().astype(np.uint8) * 255
-    
-        image_np = np.array(im)
-        masked_im = image_np * combined_mask[..., None]
-
-
         #Initialize dataframe
         object_info = []
 
-        masked_image = masked_im.copy()
+        masked_image = im.copy()
 
         for idx, leaf in enumerate(results['masks']):
             leaf = np.array(leaf, np.uint8) * 255
@@ -119,15 +100,26 @@ def main():
             
             defects = cv.convexityDefects(bigleaf, cv.convexHull(bigleaf,  returnPoints=False))
 
-            #select the two defects with the largest depth
-            petiole_starts = np.argsort(defects[:,0,3])[::-1]
-            petiole = defects[petiole_starts[:2]]
+            #select the defects with the largest depth
+            petiole_pt1_id = np.argsort(defects[:,0,3])[::-1][0]
 
-            #Find mid point between the two 
-            #first, extract farthest point from the convex hull (petiole[1,0][2])
-            #then, get coordinates on identified object (tuple(bigleaf[][0]))
-            p1 = tuple(bigleaf[petiole[0,0][2]][0])
-            p2 = tuple(bigleaf[petiole[1,0][2]][0])
+            #Convert defect info into coords
+            #Get difference between deepest defect and all others
+            defects_xy = []
+
+            for i in range(defects.shape[0]):
+                s,e,f,d = defects[i,0]
+                far = tuple(bigleaf[f][0])
+                defects_xy.append(far)
+
+            defects_xy = np.array(defects_xy)
+
+            #Get pairwise distances between all points, subset column of deepest defect
+            defect_distances = pairwise_distances(defects_xy, metric='euclidean')[:,petiole_pt1_id]
+            #Subset closest non-zero defect
+            p2 = defects_xy[np.argsort(defect_distances)[1]]
+            #Extract pt1 coords
+            p1 = defects_xy[petiole_pt1_id]
             #Now get coordinates for mid point
             (px, py) = int((p1[0] + p2[0]) / 2), int((p1[1] + p2[1]) / 2)
 
@@ -169,6 +161,9 @@ def main():
                 (sx, sy) = (x1,y1)
             
             
+            blade_length = round(blade_length/240, 2)
+            petiole_length = round(petiole_length/240, 2)
+
             #Draw petiole start
             cv.circle(masked_image,(px,py),10,[255, 0, 0],15)
             cv.circle(masked_image,(x1,y1),10,[0, 0, 255],15)
@@ -176,18 +171,21 @@ def main():
 
             #Height from leaf tip to petiole start
             cv.line(masked_image, (lx, ly), (px,py), (0, 0, 255), 20)
+            cv.putText(masked_image, str(blade_length), (lx,ly), cv.FONT_HERSHEY_SIMPLEX, 5, (0,0,0),20)
 
             #Height from petiole start to petiole end
             cv.line(masked_image, (px,py), (sx,sy), (0, 255, 0), 20)
+            cv.putText(masked_image, str(petiole_length), (sx,sy), cv.FONT_HERSHEY_SIMPLEX, 5, (0,0,0),20)
             
             
             object_info.append({
                 'Leaf': idx + 1,
-                'blade_length': blade_length,    
-                'petiole_length': petiole_length
+                'BladeLength_cm': blade_length,    
+                'PetioleLength_cm': petiole_length
             })
 
         output_path = os.path.join(output_folder, f'processed_{image_name}.jpg')
+        masked_image = cv.cvtColor(masked_image, cv.COLOR_BGR2RGB)
         cv.imwrite(output_path, masked_image)
         
         
@@ -203,6 +201,11 @@ def main():
     # Save to CSV in output folder
     df_output_path = os.path.join(output_folder, result)
     df.to_csv(df_output_path, index=False)
+
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print(f"Done running all images in: {elapsed_time:.4f} seconds")
+
         
 if __name__ == "__main__":
     main() 

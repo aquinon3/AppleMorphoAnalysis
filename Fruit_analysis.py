@@ -8,13 +8,8 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import imutils
 import pandas as pd
-import matplotlib
-import random
-from skimage.feature import peak_local_max
-from skimage.segmentation import watershed
-from scipy import ndimage
-from skimage.feature import peak_local_max
-from scipy import ndimage as ndi
+import time
+from sklearn.metrics import pairwise_distances
 from transformers import Sam3Processor, Sam3Model
 import torch
 from PIL import Image
@@ -26,7 +21,7 @@ model = Sam3Model.from_pretrained("facebook/sam3").to(device)
 processor = Sam3Processor.from_pretrained("facebook/sam3")
 
 date = date.today().strftime("%Y%m%d")
-
+start_time = time.perf_counter()
         
 def main():
     # Initialize options
@@ -158,26 +153,28 @@ def main():
                     
 
             if stem_id is not None:
-                stem_length = stem_lengths[stem_id]
+                stem_length = round(stem_lengths[stem_id]/237,2)
             
                 coords = boxes[stem_id]
                 bx0,by0,bx1,by1 = coords
             
                 #Draw bounding box for stem
                 cv.rectangle(output_cp, (bx0,by0),(bx1, by1), (255,0,0), 20)
+                cv.putText(output_cp, str(stem_length), (bx0, (by1+50)), cv.FONT_HERSHEY_SIMPLEX, 3, (255,255,255),20)
+
 
                 pass
 
             #Draw width
             cv.line(output_cp, (x + w // 2, y), (x + w // 2, y + h), (255, 0, 255), 25)
-            
-            
-            width = h    
+            width = round(h/237,2)    
+            cv.putText(output_cp, str(width), (x + w // 2, y), cv.FONT_HERSHEY_SIMPLEX, 3, (255,255,255),20)
+
             
             object_info.append({
             'Object_ID': apple_idx + 1,
-            'apple_width': width,        # Apple width
-            'stem_length': stem_length,        # Stem length
+            'AppleWith_cm': width,        # Apple width
+            'StemLength_cm': stem_length,        # Stem length
             })
 
 
@@ -201,6 +198,11 @@ def main():
     # Save to CSV in output folder
     df_output_path = os.path.join(output_folder, result)
     df.to_csv(df_output_path, index=False)
+
+    end_time = time.perf_counter()
+    elapsed_time = end_time - start_time
+    print(f"Done running all images in {elapsed_time:.4f} seconds")
         
 if __name__ == "__main__":
     main() 
+    
